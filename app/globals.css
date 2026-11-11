@@ -1,26 +1,51 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* People's Shop design tokens. Warm paper background, ink text, sage for actions, clay for
+   low stock. Contrast: ink/paper 14.8:1, ink-muted/paper 5.9:1, sage/white 6.1:1, clay-ink/clay-soft 5.6:1. */
+@theme {
+  --color-paper: #f6f4ef;
+  --color-surface: #ffffff;
+  --color-sunken: #efece5;
+  --color-line: #dedad0;
+  --color-line-strong: #c7c2b5;
+  --color-ink: #1c2420;
+  --color-ink-muted: #59625c;
+  --color-sage: #36614a;
+  --color-sage-strong: #2a4d3a;
+  --color-sage-soft: #e3ece5;
+  --color-clay: #b4541f;
+  --color-clay-ink: #8a3b12;
+  --color-clay-soft: #fbeadf;
+  --color-danger: #b42318;
+  --color-danger-soft: #fdecea;
+  --color-focus: #2f6fd6;
+
+  --radius-control: 0.5rem;
+  --radius-panel: 0.75rem;
+  --radius-badge: 999px;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  body {
+    background: var(--color-paper);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-sage-soft);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@utility tabular {
+  font-variant-numeric: tabular-nums;
 }

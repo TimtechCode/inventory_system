@@ -1,0 +1,165 @@
+// People's Shop Inventory: catalogue schema (Phase 1).
+//
+// Design notes
+// - Every sellable unit is a ProductVariant with its own SKU, stock quantity and reorder level.
+//   A product without variants has exactly one "default" variant (optionKey = "") so SKU, stock
+//   and price logic has a single code path.
+// - Product types own configurable attributes. Product-level values are stored in typed columns
+//   (ProductAttributeValue); variant-defining values link a SKU to an AttributeOption.
+// - Money is stored as integer kobo (NGN 1 = 100 kobo). A variant inherits the product price
+//   unless priceOverrideKobo is set.
+// - Stock status (LOW STOCK when quantityOnHand <= reorderLevel) is derived, never stored.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+/// How a product-type attribute is captured and stored.
+enum AttributeInputType {
+  TEXT
+  NUMBER
+  BOOLEAN
+  SELECT
+}
+
+/// Merchandising group used for browsing and filtering (e.g. Footwear).
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  /// Generated from the name at creation and never edited. Used in filter URLs and by the seed.
+  slug        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
+}
+
+/// Attribute template for a kind of merchandise (e.g. Apparel, Watch).
+model ProductType {
+  id          String                @id @default(cuid())
+  name        String                @unique
+  /// Generated from the name at creation and never edited.
+  slug        String                @unique
+  description String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  attributes  AttributeDefinition[]
+  products    Product[]
+}
+
+/// A configurable attribute of a product type (e.g. Size, Metal, Capacity).
+model AttributeDefinition {
+  id             String             @id @default(cuid())
+  productTypeId  String
+  /// Stable machine key generated from the first name (e.g. "shoe_size"); never edited.
+  code           String
+  name           String
+  inputType      AttributeInputType
+  /// NUMBER attributes only (e.g. "cm", "mm", "L").
+  unit           String?
+  isRequired     Boolean            @default(false)
+  /// SELECT attributes only: products of this type may create one SKU per option.
+  allowsVariants Boolean            @default(false)
+  position       Int                @default(0)
+
+  productType   ProductType             @relation(fields: [productTypeId], references: [id], onDelete: Cascade)
+  options       AttributeOption[]
+  productValues ProductAttributeValue[]
+  variantValues VariantOptionValue[]
+
+  @@unique([productTypeId, code])
+  @@unique([productTypeId, name])
+}
+
+/// A permitted value of a SELECT attribute (e.g. "M", "Indigo", "Sterling silver").
+model AttributeOption {
+  id          String @id @default(cuid())
+  attributeId String
+  value       String
+  position    Int    @default(0)
+
+  attribute     AttributeDefinition     @relation(fields: [attributeId], references: [id], onDelete: Cascade)
+  productValues ProductAttributeValue[]
+  variantValues VariantOptionValue[]
+
+  @@unique([attributeId, value])
+}
+
+model Product {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  categoryId    String
+  /// Fixed after creation: changing it would invalidate attribute values and variants.
+  productTypeId String
+  /// Default sales price in kobo. Variants inherit it unless they set priceOverrideKobo.
+  priceKobo     Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  category        Category                @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  productType     ProductType             @relation(fields: [productTypeId], references: [id], onDelete: Restrict)
+  variants        ProductVariant[]
+  attributeValues ProductAttributeValue[]
+
+  @@index([categoryId])
+  @@index([productTypeId])
+}
+
+/// Product-level descriptive value. Exactly one typed column is set, matching the attribute's
+/// inputType. Attributes used as variant axes for a product never appear here.
+model ProductAttributeValue {
+  productId    String
+  attributeId  String
+  textValue    String?
+  numberValue  Float?
+  booleanValue Boolean?
+  optionId     String?
+
+  product   Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attribute AttributeDefinition @relation(fields: [attributeId], references: [id], onDelete: Restrict)
+  option    AttributeOption?    @relation(fields: [optionId], references: [id], onDelete: Restrict)
+
+  @@id([productId, attributeId])
+  @@index([attributeId])
+  @@index([optionId])
+}
+
+/// A sellable SKU. Every product has at least one.
+model ProductVariant {
+  id                String @id @default(cuid())
+  productId         String
+  sku               String @unique
+  /// Canonical, sorted "attributeId:optionId|..." signature of this SKU's options.
+  /// "" marks the single default SKU of a product without variants.
+  optionKey         String @default("")
+  /// Optional per-SKU sales price in kobo; null means "use Product.priceKobo".
+  priceOverrideKobo Int?
+  quantityOnHand    Int    @default(0)
+  reorderLevel      Int    @default(0)
+
+  product      Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  optionValues VariantOptionValue[]
+
+  @@unique([productId, optionKey])
+}
+
+/// One option per variant axis per SKU (e.g. Size = M, Colour = Indigo).
+model VariantOptionValue {
+  variantId   String
+  attributeId String
+  optionId    String
+
+  variant   ProductVariant      @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attribute AttributeDefinition @relation(fields: [attributeId], references: [id], onDelete: Restrict)
+  option    AttributeOption     @relation(fields: [optionId], references: [id], onDelete: Restrict)
+
+  @@id([variantId, attributeId])
+  @@index([attributeId])
+  @@index([optionId])
+}
