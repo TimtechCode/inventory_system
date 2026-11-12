@@ -6,6 +6,7 @@ export const NOTICES = {
   "product-created": "Product added",
   "product-updated": "Changes saved",
   "product-deleted": "Product deleted",
+  "stock-adjusted": "Stock updated",
   "category-created": "Category added",
   "category-updated": "Changes saved",
   "category-deleted": "Category deleted",

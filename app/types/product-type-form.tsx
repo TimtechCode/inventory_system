@@ -5,6 +5,7 @@ import { useActionState, useEffect, useId, useState } from "react";
 
 import { useResetOnHide } from "@/components/use-reset-on-hide";
 import { Button, LinkButton } from "@/components/ui/button";
+import { submitWithoutReset } from "@/components/submit-without-reset";
 import { ErrorSummary } from "@/components/ui/error-summary";
 import { Field, FieldError, Input, Select, Textarea, describedBy } from "@/components/ui/field";
 import { plural } from "@/lib/format";
@@ -88,7 +89,7 @@ function Inner({ action, productType, onSubmitted, onFailed }: Props & { onSubmi
   };
 
   return (
-    <form action={formAction} onSubmit={onSubmitted} className="space-y-6" noValidate>
+    <form action={formAction} onSubmit={submitWithoutReset(formAction, onSubmitted)} className="space-y-6" noValidate>
       <input type="hidden" name="payload" value={JSON.stringify(payload)} />
       {productType && <input type="hidden" name="updatedAt" value={productType.updatedAt} />}
       <ErrorSummary state={state} />

@@ -210,6 +210,59 @@ export type ProductEditData = {
 };
 
 // ---------------------------------------------------------------------------
+// Stock history
+// ---------------------------------------------------------------------------
+
+export const STOCK_MOVEMENT_KINDS = ["INITIAL", "RECEIVED", "SOLD", "RETURNED", "DAMAGED", "COUNT", "EDIT"] as const;
+export type StockMovementKind = (typeof STOCK_MOVEMENT_KINDS)[number];
+
+/** Kinds a person can record from the "Adjust stock" dialog. */
+export const ADJUSTMENT_KINDS = ["RECEIVED", "SOLD", "RETURNED", "DAMAGED", "COUNT"] as const;
+export type AdjustmentKind = (typeof ADJUSTMENT_KINDS)[number];
+
+export type StockMovementRow = {
+  id: number;
+  kind: StockMovementKind;
+  quantityChange: number;
+  quantityAfter: number;
+  note: string | null;
+  createdAt: string;
+  /** null when the product has since been deleted. */
+  productId: string | null;
+  /** Current product name if it still exists, otherwise the name when the movement was recorded. */
+  productName: string;
+  sku: string;
+  variantLabel: string;
+};
+
+export type StockHistoryQuery = {
+  product: string | null; // product id
+  kind: StockMovementKind | null;
+  page: number; // 1-based
+};
+
+export type StockHistoryResult = {
+  items: StockMovementRow[];
+  /** Normalised query with page clamped to 1..pageCount. */
+  query: StockHistoryQuery;
+  /** Name of the filtered product, when filtering by one that exists. */
+  productName: string | null;
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+};
+
+/** Sent by the "Adjust stock" dialog. Strings exactly as typed. */
+export type StockAdjustmentInput = {
+  variantId: string;
+  kind: AdjustmentKind;
+  /** Units moved; for COUNT, the counted quantity on hand. */
+  quantity: string;
+  note: string;
+};
+
+// ---------------------------------------------------------------------------
 // Input payloads (sent from client forms to server actions; strings exactly as typed)
 // ---------------------------------------------------------------------------
 
@@ -276,7 +329,8 @@ export type ServiceResult<T> = { ok: true; data: T } | { ok: false; error: Servi
 
 /** State returned by form server actions used with useActionState. */
 export type FormState = {
-  status: "idle" | "error";
+  /** "success" is only used by forms that stay on the page (e.g. dialogs); others redirect. */
+  status: "idle" | "error" | "success";
   formError: string | null;
   fieldErrors: FieldErrors;
   /** Increments on every failed submit so the UI can re-focus the error summary. */

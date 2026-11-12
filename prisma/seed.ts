@@ -336,6 +336,7 @@ async function main() {
     if (existing > 0) continue;
 
     const type = typeIndex.get(p.type)!;
+    const typeAttrs = types.find((t) => t.slug === p.type)!.attributes;
     const attr = (code: string) => {
       const a = type.attrs.get(code);
       if (!a) throw new Error(`Unknown attribute ${code} on type ${p.type}`);
@@ -378,7 +379,7 @@ async function main() {
           .sort((a, b) => (a.attributeId < b.attributeId ? -1 : a.attributeId > b.attributeId ? 1 : 0))
           .map((o) => `${o.attributeId}:${o.optionId}`)
           .join("|");
-        await tx.productVariant.create({
+        const variant = await tx.productVariant.create({
           data: {
             productId: product.id,
             sku: v.sku,
@@ -387,6 +388,24 @@ async function main() {
             quantityOnHand: v.qty,
             reorderLevel: v.reorder,
             optionValues: { create: opts },
+          },
+        });
+        // Opening entry in the stock history, labelled in attribute order like the app does.
+        const variantLabel = Object.entries(v.options ?? {})
+          .map(([code, value]) => ({ position: typeAttrs.findIndex((a) => a.code === code), value }))
+          .sort((a, b) => a.position - b.position)
+          .map((o) => o.value)
+          .join(" / ");
+        await tx.stockMovement.create({
+          data: {
+            productId: product.id,
+            variantId: variant.id,
+            productName: p.name,
+            sku: v.sku,
+            variantLabel,
+            kind: "INITIAL",
+            quantityChange: v.qty,
+            quantityAfter: v.qty,
           },
         });
       }

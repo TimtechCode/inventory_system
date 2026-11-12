@@ -6,6 +6,7 @@ export const testDb = db;
 /** Deletes every row, children first, so each test starts from an empty catalogue. */
 export async function resetDb(): Promise<void> {
   await db.$transaction([
+    db.stockMovement.deleteMany(),
     db.variantOptionValue.deleteMany(),
     db.productAttributeValue.deleteMany(),
     db.productVariant.deleteMany(),

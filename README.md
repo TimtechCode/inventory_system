@@ -17,6 +17,11 @@ Built with Next.js 16 (App Router, Cache Components), Prisma 7 on SQLite, Tailwi
 - **Product types**: define the attributes each kind of product records (text, number with unit,
   yes/no, list of options) and which list attributes create variants. Edits that would break
   existing products (removing an option in use, changing an attribute's input type) are refused.
+- **Stock history**: every change to a SKU's quantity is logged: opening stock, deliveries
+  received, sales, customer returns, damaged or lost stock, stock counts, and quantities edited on
+  the product form. Record movements with **Adjust** on a product's page (it won't let stock go
+  below zero), see the latest ones on the product, and browse or filter everything under
+  **Stock history**. History survives product deletion.
 - **Categories** for browsing. Categories and types in use can't be deleted.
 - Concurrent edits are detected: saving a record someone else changed asks you to reload.
 
@@ -55,5 +60,5 @@ First time only for e2e: `npx playwright install chromium`.
 | `app/actions/` | Server actions wrapping the services |
 | `lib/types.ts` | Contracts shared by services, actions and UI |
 | `lib/money.ts`, `lib/stock.ts`, `lib/format.ts` | Naira parsing/formatting, low-stock rule, dates |
-| `app/products`, `app/categories`, `app/types` | Pages and client forms |
+| `app/products`, `app/categories`, `app/types`, `app/stock` | Pages and client forms |
 | `components/` | Shared UI |

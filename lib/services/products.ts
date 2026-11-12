@@ -26,6 +26,7 @@ import type {
 } from "@/lib/types";
 
 import { DESCRIPTION_MAX, getCategoryOptions } from "./categories";
+import { type MovementDraft, recordMovements } from "./stock";
 import { getProductTypeDefinitions, toAttributeDTO } from "./product-types";
 import {
   FIX_BELOW,
@@ -627,6 +628,17 @@ async function loadTypeDefinition(id: string): Promise<ProductTypeDefinition | n
     : null;
 }
 
+/** "M / Indigo" from a variant's options, in the product type's attribute order. */
+function labelFor(options: { attributeId: string; optionId: string }[], type: ProductTypeDefinition): string {
+  return type.attributes
+    .flatMap((a) => {
+      const chosen = options.find((o) => o.attributeId === a.id);
+      const value = chosen ? a.options.find((o) => o.id === chosen.optionId)?.value : undefined;
+      return value ? [value] : [];
+    })
+    .join(" / ");
+}
+
 function skuClash(error: unknown): boolean {
   if (prismaCode(error) !== "P2002") return false;
   return JSON.stringify((error as { meta?: unknown }).meta ?? "").includes("sku") || String(error).includes("sku");
@@ -655,8 +667,9 @@ export async function createProduct(input: ProductInput): Promise<ServiceResult<
         },
         select: { id: true },
       });
+      const movements: MovementDraft[] = [];
       for (const v of clean.variants) {
-        await tx.productVariant.create({
+        const variant = await tx.productVariant.create({
           data: {
             productId: product.id,
             sku: v.sku,
@@ -666,8 +679,20 @@ export async function createProduct(input: ProductInput): Promise<ServiceResult<
             reorderLevel: v.reorderLevel,
             optionValues: { create: v.options },
           },
+          select: { id: true },
+        });
+        movements.push({
+          productId: product.id,
+          variantId: variant.id,
+          productName: clean.name,
+          sku: v.sku,
+          variantLabel: labelFor(v.options, productType!),
+          kind: "INITIAL",
+          quantityChange: v.quantityOnHand,
+          quantityAfter: v.quantityOnHand,
         });
       }
+      await recordMovements(tx, movements);
       return product;
     });
     return ok(created);
@@ -685,7 +710,7 @@ export async function updateProduct(
 ): Promise<ServiceResult<{ id: string }>> {
   const existing = await db.product.findUnique({
     where: { id },
-    include: { variants: { select: { id: true } } },
+    include: { variants: { select: { id: true, quantityOnHand: true } } },
   });
   if (!existing) return fail(NOT_FOUND);
   if (expectedUpdatedAt && existing.updatedAt.toISOString() !== expectedUpdatedAt) return fail(STALE);
@@ -732,6 +757,8 @@ export async function updateProduct(
         });
       }
 
+      const before = new Map(existing.variants.map((v) => [v.id, v.quantityOnHand]));
+      const movements: MovementDraft[] = [];
       for (const v of clean.variants) {
         const data = {
           sku: v.sku,
@@ -740,16 +767,32 @@ export async function updateProduct(
           quantityOnHand: v.quantityOnHand,
           reorderLevel: v.reorderLevel,
         };
+        const movement = {
+          productId: id,
+          productName: clean.name,
+          sku: v.sku,
+          variantLabel: labelFor(v.options, productType!),
+          quantityAfter: v.quantityOnHand,
+        };
         if (v.id) {
           await tx.variantOptionValue.deleteMany({ where: { variantId: v.id } });
           await tx.productVariant.update({
             where: { id: v.id },
             data: { ...data, optionValues: { create: v.options } },
           });
+          const change = v.quantityOnHand - (before.get(v.id) ?? 0);
+          if (change !== 0) {
+            movements.push({ ...movement, variantId: v.id, kind: "EDIT", quantityChange: change, note: "Changed on the product form" });
+          }
         } else {
-          await tx.productVariant.create({ data: { ...data, productId: id, optionValues: { create: v.options } } });
+          const created = await tx.productVariant.create({
+            data: { ...data, productId: id, optionValues: { create: v.options } },
+            select: { id: true },
+          });
+          movements.push({ ...movement, variantId: created.id, kind: "INITIAL", quantityChange: v.quantityOnHand });
         }
       }
+      await recordMovements(tx, movements);
     });
   } catch (error) {
     if (skuClash(error)) return fail("One of these SKUs was just taken by another product. Choose a different SKU.");

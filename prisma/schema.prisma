@@ -19,6 +19,24 @@ datasource db {
   provider = "sqlite"
 }
 
+/// Why a SKU's quantity on hand changed.
+enum StockMovementKind {
+  /// Quantity when the SKU was created (or when history began for existing SKUs).
+  INITIAL
+  /// Goods received from a supplier.
+  RECEIVED
+  /// Sold to a customer.
+  SOLD
+  /// Returned by a customer.
+  RETURNED
+  /// Damaged, lost or stolen.
+  DAMAGED
+  /// Physical stock count: quantity set to what was counted.
+  COUNT
+  /// Quantity changed directly on the product edit form.
+  EDIT
+}
+
 /// How a product-type attribute is captured and stored.
 enum AttributeInputType {
   TEXT
@@ -106,6 +124,7 @@ model Product {
   productType     ProductType             @relation(fields: [productTypeId], references: [id], onDelete: Restrict)
   variants        ProductVariant[]
   attributeValues ProductAttributeValue[]
+  stockMovements  StockMovement[]
 
   @@index([categoryId])
   @@index([productTypeId])
@@ -143,8 +162,9 @@ model ProductVariant {
   quantityOnHand    Int    @default(0)
   reorderLevel      Int    @default(0)
 
-  product      Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
-  optionValues VariantOptionValue[]
+  product        Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  optionValues   VariantOptionValue[]
+  stockMovements StockMovement[]
 
   @@unique([productId, optionKey])
 }
@@ -162,4 +182,30 @@ model VariantOptionValue {
   @@id([variantId, attributeId])
   @@index([attributeId])
   @@index([optionId])
+}
+
+/// Append-only log of stock changes. Product name, SKU and variant label are copied at write time
+/// so history stays readable after a product or SKU is renamed or deleted (links become null).
+model StockMovement {
+  id             Int               @id @default(autoincrement())
+  productId      String?
+  variantId      String?
+  productName    String
+  sku            String
+  /// e.g. "M / Indigo"; "" for a single-SKU product.
+  variantLabel   String            @default("")
+  kind           StockMovementKind
+  /// Signed change, e.g. +12 received, -2 sold. 0 is allowed for a count that matched.
+  quantityChange Int
+  quantityAfter  Int
+  note           String?
+  createdAt      DateTime          @default(now())
+
+  product Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([productId, createdAt])
+  @@index([variantId, createdAt])
+  @@index([kind])
 }

@@ -112,7 +112,47 @@ test("refuses to delete a category that still has products", async ({ page }) =>
   await expect(page.getByRole("alertdialog").getByRole("alert")).toContainText("still has 3 products");
 });
 
-for (const path of ["/products", "/products/new", "/categories", "/types", "/types/new"]) {
+test("adjusts stock from the product page and shows it in the history", async ({ page }) => {
+  await page.goto("/products?q=vacuum");
+  await page.getByRole("link", { name: "Vacuum Flask" }).click();
+  await expect(page.getByRole("heading", { name: "Vacuum Flask", level: 1 })).toBeVisible();
+
+  await page.getByRole("button", { name: /Adjust stock for Vacuum Flask/ }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText("2 on hand")).toBeVisible();
+
+  // Selling more than is on hand is refused.
+  await dialog.getByLabel("Sold").check();
+  await dialog.getByLabel("Quantity sold").fill("5");
+  await expect(dialog.getByText("That's more than the 2 on hand.")).toBeVisible();
+  await dialog.getByRole("button", { name: "Save adjustment" }).click();
+  await expect(dialog.getByText("Only 2 on hand.", { exact: false })).toBeVisible();
+
+  await dialog.getByLabel("Received").check();
+  await dialog.getByLabel("Quantity received").fill("24");
+  await expect(dialog.getByText("New quantity: 26")).toBeVisible();
+  await dialog.getByLabel("Note").fill("Invoice INV-2026-118");
+  await dialog.getByRole("button", { name: "Save adjustment" }).click();
+
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText("Stock updated");
+  await expect(page.getByText("26 units")).toBeVisible();
+  const history = page.getByRole("table", { name: /Recent stock movements/ });
+  await expect(history.getByRole("row").nth(1)).toContainText("Received");
+  await expect(history.getByRole("row").nth(1)).toContainText("+24");
+  await expect(history.getByRole("row").nth(1)).toContainText("Invoice INV-2026-118");
+
+  await page.getByRole("link", { name: "View all" }).click();
+  await expect(page).toHaveURL(/\/stock\?product=/);
+  await expect(page.getByText("Showing history for")).toContainText("Vacuum Flask");
+  await page.getByRole("link", { name: "Show all products" }).click();
+  await page.getByRole("navigation", { name: "Movement type" }).getByRole("link", { name: "Received" }).click();
+  await expect(page).toHaveURL(/kind=RECEIVED/);
+  await expect(page.getByRole("link", { name: "Vacuum Flask" })).toBeVisible();
+  await expect(page.getByText(/Showing 1–1 of 1 movement/)).toBeVisible();
+});
+
+for (const path of ["/products", "/products/new", "/categories", "/types", "/types/new", "/stock"]) {
   test(`has no detectable accessibility violations on ${path}`, async ({ page }) => {
     await page.goto(path);
     await page.waitForLoadState("networkidle");

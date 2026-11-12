@@ -5,6 +5,7 @@ import { type ReactNode, useActionState, useEffect, useMemo, useState } from "re
 
 import { useResetOnHide } from "@/components/use-reset-on-hide";
 import { Button, LinkButton } from "@/components/ui/button";
+import { submitWithoutReset } from "@/components/submit-without-reset";
 import { ErrorSummary } from "@/components/ui/error-summary";
 import { Field, FieldError, Input, Select, Textarea, controlClass, describedBy } from "@/components/ui/field";
 import { cn } from "@/lib/cn";
@@ -213,7 +214,7 @@ function ProductFormInner({
   };
 
   return (
-    <form action={formAction} onSubmit={onSubmitted} className="space-y-6" noValidate>
+    <form action={formAction} onSubmit={submitWithoutReset(formAction, onSubmitted)} className="space-y-6" noValidate>
       <input type="hidden" name="payload" value={JSON.stringify(payload)} />
       {product && <input type="hidden" name="updatedAt" value={product.updatedAt} />}
       <ErrorSummary state={state} />

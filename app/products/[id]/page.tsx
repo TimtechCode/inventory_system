@@ -1,16 +1,21 @@
-import { Pencil } from "lucide-react";
+import { History, Pencil } from "lucide-react";
+import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
 
 import { deleteProductAction } from "@/app/actions/products";
 import { ConfirmDelete } from "@/components/confirm-delete";
+import { MovementTable } from "@/components/movement-table";
 import { StockBadge, StockMeter } from "@/components/stock";
 import { LinkButton } from "@/components/ui/button";
 import { PageHeader, Panel, Skeleton } from "@/components/ui/page-header";
 import { formatCount, formatDateTime, plural } from "@/lib/format";
 import { formatNaira, formatNairaRange } from "@/lib/money";
 import { getProductDetail } from "@/lib/services/products";
+import { getRecentMovements } from "@/lib/services/stock";
+
+import { AdjustStock } from "./adjust-stock";
 
 export const metadata: Metadata = { title: "Product" };
 
@@ -72,7 +77,7 @@ async function ProductDetailView({ params }: Pick<PageProps<"/products/[id]">, "
       </dl>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Panel className="lg:col-span-2">
+        <Panel className="lg:col-span-3">
           <h2 className="border-b border-line px-4 py-3 font-semibold">{p.hasVariants ? "Variants" : "Stock"}</h2>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[36rem] text-sm">
@@ -88,6 +93,9 @@ async function ProductDetailView({ params }: Pick<PageProps<"/products/[id]">, "
                   <th scope="col" className="px-4 py-2.5 font-medium">On hand</th>
                   <th scope="col" className="px-4 py-2.5 text-right font-medium">Reorder at</th>
                   <th scope="col" className="px-4 py-2.5 font-medium">Status</th>
+                  <th scope="col" className="px-4 py-2.5">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
@@ -98,7 +106,7 @@ async function ProductDetailView({ params }: Pick<PageProps<"/products/[id]">, "
                         {o.value}
                       </td>
                     ))}
-                    <td className="px-4 py-2.5 font-mono text-xs">{v.sku}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs whitespace-nowrap">{v.sku}</td>
                     <td className="tabular px-4 py-2.5 text-right">
                       {formatNaira(v.priceKobo)}
                       {v.priceOverrideKobo !== null && <span className="sr-only"> (variant price)</span>}
@@ -109,6 +117,14 @@ async function ProductDetailView({ params }: Pick<PageProps<"/products/[id]">, "
                     <td className="tabular px-4 py-2.5 text-right">{formatCount(v.reorderLevel)}</td>
                     <td className="px-4 py-2.5">
                       <StockBadge status={v.status} />
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <AdjustStock
+                        variantId={v.id}
+                        label={`${p.name}${v.label ? ` — ${v.label}` : ""} (${v.sku})`}
+                        quantityOnHand={v.quantityOnHand}
+                        reorderLevel={v.reorderLevel}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -134,7 +150,38 @@ async function ProductDetailView({ params }: Pick<PageProps<"/products/[id]">, "
             </dl>
           </div>
         </Panel>
+
+        <Panel className="lg:col-span-2">
+          <div className="flex items-center justify-between gap-4 border-b border-line px-4 py-3">
+            <h2 className="font-semibold">Stock history</h2>
+            <Link href={`/stock?product=${p.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-sage hover:underline">
+              <History aria-hidden className="size-4" />
+              View all
+            </Link>
+          </div>
+          <Suspense fallback={<Skeleton rows={3} />}>
+            <RecentHistory productId={p.id} productName={p.name} />
+          </Suspense>
+        </Panel>
       </div>
+    </>
+  );
+}
+
+async function RecentHistory({ productId, productName }: { productId: string; productName: string }) {
+  const { items, total } = await getRecentMovements(productId);
+  if (items.length === 0) return <p className="px-4 py-6 text-sm text-ink-muted">No stock movements yet.</p>;
+  return (
+    <>
+      <MovementTable items={items} showProduct={false} caption={`Recent stock movements for ${productName}`} />
+      {total > items.length && (
+        <p className="border-t border-line px-4 py-2.5 text-sm text-ink-muted">
+          Showing the latest {items.length} of {formatCount(total)}.{" "}
+          <Link href={`/stock?product=${productId}`} className="font-medium text-sage hover:underline">
+            See full history
+          </Link>
+        </p>
+      )}
     </>
   );
 }

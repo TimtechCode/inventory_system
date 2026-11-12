@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 
 import { useResetOnHide } from "@/components/use-reset-on-hide";
 import { Button, LinkButton } from "@/components/ui/button";
+import { submitWithoutReset } from "@/components/submit-without-reset";
 import { ErrorSummary } from "@/components/ui/error-summary";
 import { Field, Input, Textarea, describedBy } from "@/components/ui/field";
 import { initialFormState } from "@/lib/validation/form-state";
@@ -30,7 +31,7 @@ function Inner({ action, category, onSubmitted, onFailed }: Props & { onSubmitte
   const [description, setDescription] = useState(category?.description ?? "");
 
   return (
-    <form action={formAction} onSubmit={onSubmitted} className="space-y-5 rounded-panel border border-line bg-surface p-5" noValidate>
+    <form action={formAction} onSubmit={submitWithoutReset(formAction, onSubmitted)} className="space-y-5 rounded-panel border border-line bg-surface p-5" noValidate>
       {category && <input type="hidden" name="updatedAt" value={category.updatedAt} />}
       <ErrorSummary state={state} />
       <Field id="name" label="Name" required error={e.name}>
